@@ -2,12 +2,10 @@ package FinalProject;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Random;
+import java.util.*;
 import java.awt.event.KeyListener;
 import java.awt.event.KeyEvent;
+import java.util.List;
 
 //NOTES
 //we will have a createRandomBlock method that creates a random tetromino at a position y=top of window,
@@ -50,22 +48,42 @@ class Pair{
 //we need the interface since the landing method will be different for different shapes
 interface methods{
     //We will also add a rotate method here, or we can have a rotate method outside that takes any of the shapes using generics
-    public void landed(World w, double time);
-    public void update(World w, double time);
+    void landed(World w);
+    void update(World w, double jump);
 }
 
-class Tetromino {
+abstract class Tetromino{
     Cube cube1;
     Cube cube2;
     Cube cube3;
     Cube cube4;
-
+    int size=World.sizeOfCubes;
+    Color color;
+    Random rand=new Random();
+    public abstract void rotate1();
+    public abstract void rotate2();
+    public abstract void rotate3();
+    public abstract void rotate4();
+}
+class Cube implements methods{
     Pair position;
     Pair velocity;
     Pair acceleration;
     double size;
     double dampening;
     Color color;
+    boolean keepMoving;
+
+    public Cube(Color color1) {
+        Random rand = new Random();
+        position = new Pair(World.sizeOfCubes*16, -25);
+        velocity = new Pair(0,0);
+        acceleration = new Pair(0, 0);
+        size = World.sizeOfCubes*0.5;
+        dampening = 1;
+        keepMoving =true;
+        color=color1;
+    }
     public void setPosition(Pair p){
         position = p;
     }
@@ -91,28 +109,6 @@ class Tetromino {
     public double flipY() {
         acceleration.flipY();
         return 0.0;
-    }
-
-public void draw(Graphics g){
-
-}
-public void update(World w, double time){
-
-}
-
-}
-
-//cube should not implement methods, we will be using cube to create the other shapes which will implement methods
-class Cube extends Tetromino {
-    //Removed this fields from draw method so that i can use them in adjustRightCube method
-    public Cube() {
-        Random rand = new Random();
-        position = new Pair(500.0, -25);
-        velocity = new Pair(0,200);
-        acceleration = new Pair(0, 0);
-        size = 25;
-        dampening = 1;
-        color = new Color(rand.nextFloat(), rand.nextFloat(), rand.nextFloat());
     }
     public Color getColor(){
         return color;
@@ -172,295 +168,1434 @@ class Cube extends Tetromino {
 
         //graphics2D.drawLine(bottomFrontRight.x, bottomFrontRight.y, bottomBackRight.x, bottomBackRight.y);
     }
-    //REMEMBER TO REMOVE THIS METHOD
-    public void landed(World w, double time){
 
-        if (w.currentPiece.position.y + 2* size > w.height || touchesOtherPieces(w,w.currentPiece)){
-            velocity.y=0;
+    public void landed(World w){
+        //a piece stops if it touches the floor or the top of another cube
 
-            //modify this to be Tetromino instead of cube
-            Cube tetromino= (Cube) w.currentPiece;
-            w.currentPiece=new Cube();
+            if (position.y > World.endOfHeight || w.landsOnOtherCube(w.piece.cube1) ||
+                    w.landsOnOtherCube(w.piece.cube2) || w.landsOnOtherCube(w.piece.cube3)||
+                    w.landsOnOtherCube(w.piece.cube4)) {
 
-            //when our current piece lands we add it to our collection
-            //WE CAN HAVE AN ADJUST METHOD THAT ADJUSTS THE POSITION IN CASE IT LOOKS LIKE A CUBE LANDED INSIDE ANOTHER CUBE
-            w.tetrominos.add(tetromino);
+                //this stops the cubes from moving farther
+                ThreeDTetris.keepMovingDown =false;
+                keepMoving =false;
+
+                World.addCubes(World.tetrominos, w.piece);
+
+                World.isGameOver();
+                //Checks if game is over after you add new cubes
+
+
+                if(!World.gameOver) {
+                    //only create another piece if game is not over
+                    w.piece = World.newRandomPiece();
+
+                    //re-initialize rotateChecker to 1 everytime you create a new piece
+                    World.rotateChecker=1;
+                }
+            }
+        }
+
+    public void update(World w,double jump){
+
+        if(keepMoving && !World.gameOver) {
+            //only move cubes if game is not over and we are allowed to keep moving
+                position.y += jump * World.sizeOfCubes;
+        }
+        landed(w);
+
+
+    }
+}
+
+//WE HAVE SEVEN CLASSES FOR SEVEN PIECES
+class LinePiece extends Tetromino{
+    //             [4][3][2][1]
+
+    public LinePiece(){
+        color = new Color(rand.nextFloat(), rand.nextFloat(), rand.nextFloat());
+
+        cube1=new Cube(color);
+
+
+        cube2=new Cube(color);
+        cube2.position.x=cube1.position.x-size;
+
+
+        cube3=new Cube(color);
+        cube3.position.x=cube2.position.x-size;
+
+
+        cube4=new Cube(color);
+        cube4.position.x=cube3.position.x-size;
+    }
+
+    public void rotate1(){
+
+//       [4][3][2][1]  --->   [4]
+//                            [3]
+//                            [2]
+ //                           [1]
+        //you can't do this rotation if there is a cube less than three cubes under four
+        //since you need three spaces under cube 4
+        if(clearToRotate1()) {
+            cube3.position.y = cube4.position.y + size;
+            cube3.position.x = cube4.position.x;
+            cube2.position.y = cube3.position.y + size;
+            cube2.position.x = cube4.position.x;
+            cube1.position.y = cube2.position.y + size;
+            cube1.position.x = cube4.position.x;
+            World.rotateChecker=2;
+        }
+    }
+    private boolean clearToRotate1() {
+        if(cube4.position.y>=World.endOfHeight){
+            return false;
+        }
+        for(Cube t:World.tetrominos){
+            if(t.position.x ==cube4.position.x  && t.position.y <= cube4.position.y+3*size ){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public void rotate2(){
+        // [4]
+        // [3]
+        // [2]
+        // [1]  --->  [1][2][3][4]
+
+        if(clearToRotate2()) {
+            cube2.position.y = cube1.position.y;
+            cube2.position.x = cube1.position.x + size;
+            cube3.position.y = cube1.position.y;
+            cube3.position.x = cube2.position.x + size;
+            cube4.position.y = cube1.position.y;
+            cube4.position.x = cube3.position.x + size;
+            World.rotateChecker = 3;
+        }
+    }
+
+    private boolean clearToRotate2() {
+        if(cube1.position.x>World.endOfWidth){
+            return false;
+        }
+        for(Cube t:World.tetrominos){
+            if(t.position.y==cube1.position.y && t.position.x<=cube1.position.y+3*size ){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public void rotate3(){
+//  [1][2][3][4]   --> [1]
+//                     [2]
+//                     [3]
+//                     [4]
+        if(clearToRotate3()) {
+            cube2.position.y = cube1.position.y + size;
+            cube2.position.x = cube1.position.x;
+            cube3.position.y = cube2.position.y + size;
+            cube3.position.x = cube1.position.x;
+            cube4.position.y = cube3.position.y + size;
+            cube4.position.x = cube1.position.x;
+            World.rotateChecker = 4;
         }
 
     }
 
-    private boolean touchesOtherPieces(World w, Tetromino tetromino) {
-
-            for(Tetromino t: w.tetrominos){
-                if(t.position.x==tetromino.position.x && tetromino.position.y>t.position.y-2*size){
-                    return true;
-                }
+    private boolean clearToRotate3() {
+        if(cube4.position.y>=World.endOfHeight){
+            return false;
+        }
+        for(Cube t:World.tetrominos){
+            if(t.position.x==cube1.position.x && t.position.y<=cube1.position.y+3*size){
+                return false;
             }
-
-        return false;
+        }
+        return true;
     }
 
-    //REMEMBER TO REMOVE THIS METHOD
-    public void update(World w, double time){
-        position = position.add(velocity.times(time));
-        velocity = velocity.add(acceleration.times(time));
-        landed(w, time);
+    public void rotate4() {
+        //        [1]
+        //        [2]
+        //        [3]
+        //        [4]   ---> [4][3][2][1]
+        if (clearToRotate4()){
+            cube3.position.y = cube4.position.y;
+        cube3.position.x = cube4.position.x + size;
+        cube2.position.y = cube4.position.y;
+        cube2.position.x = cube3.position.x + size;
+        cube1.position.y = cube4.position.y;
+        cube1.position.x = cube2.position.x + size;
+        World.rotateChecker = 1;
+    }
     }
 
-
-}
-
-//WE HAVE SEVEN CLASSES FOR SEVEN PIECES
-class LinePiece extends Tetromino implements methods{
-    //It consists of four blocks in a straight line.
-    public LinePiece(){
-    }
-
-    @Override
-    public void landed(World w, double time) {
-
-    }
-
-    @Override
-    public void update(World w, double time){
-        position = position.add(velocity.times(time));
-        velocity = velocity.add(acceleration.times(time));
-        landed(w, time);
-    }
-}
-class SquarePiece extends Tetromino implements methods{
-    //It is shaped like a square and consists of four blocks in a 2x2 formation.
-    // It's the only regular tetromino that doesn't have to rotate due to its symmetrical shape.
-
-    @Override
-    public void landed(World w, double time) {
-
-    }
-
-    @Override
-    public void update(World w, double time){
-        position = position.add(velocity.times(time));
-        velocity = velocity.add(acceleration.times(time));
-        landed(w, time);
+    private boolean clearToRotate4() {
+        if(cube4.position.x>=World.endOfWidth){
+            return false;
+        }
+        for(Cube t:World.tetrominos){
+            if(t.position.y==cube4.position.y && t.position.x<=cube4.position.y+3*size){
+                return false;
+            }
+        }
+        return true;
     }
 }
-class TPiece extends Tetromino implements methods{
+class SquarePiece extends Tetromino{
+    //              [4][3]
+//                  [2][1]
+
+    public SquarePiece(){
+        color = new Color(rand.nextFloat(), rand.nextFloat(), rand.nextFloat());
+
+        cube1=new Cube(color);
+
+        cube2=new Cube(color);
+        cube2.position.x=cube1.position.x-size;
+        cube2.position.y=cube1.position.y;
+
+        cube3=new Cube(color);
+        cube3.position.x=cube1.position.x;
+        cube3.position.y=cube1.position.y-size;
+
+        cube4=new Cube(color);
+        cube4.position.x=cube2.position.x;
+        cube4.position.y=cube3.position.y;
+    }
+
+    @Override
+    public void rotate1() {
+
+    }
+
+    @Override
+    public void rotate2() {
+
+    }
+
+    @Override
+    public void rotate3() {
+
+    }
+
+    @Override
+    public void rotate4() {
+
+    }
+}
+class TPiece extends Tetromino {
     //This piece is shaped like the letter T
     // composed of a row of three blocks with one added above the center.
 
-    @Override
-    public void landed(World w, double time) {
+    public TPiece(){
+        color = new Color(rand.nextFloat(), rand.nextFloat(), rand.nextFloat());
+
+//        [4][3][2]
+//           [1]
+        cube1=new Cube(color);
+
+        cube2=new Cube(color);
+        cube2.position.x=cube1.position.x+size;
+        cube2.position.y=cube1.position.y-size;
+
+        cube3=new Cube(color);
+        cube3.position.x=cube1.position.x;
+        cube3.position.y=cube1.position.y-size;
+
+        cube4=new Cube(color);
+        cube4.position.x=cube1.position.x-size;
+        cube4.position.y=cube1.position.y-size;
 
     }
 
     @Override
-    public void update(World w, double time){
-        position = position.add(velocity.times(time));
-        velocity = velocity.add(acceleration.times(time));
-        landed(w, time);
+    public void rotate1() {
+        //        [4][3][2]         [4]
+//                   [1]    ->   [1][3]
+ //                                 [2]
+        if(clearToRotate1()){
+            cube4.position.x+=2*size;
+            cube3.position.x+=size;
+            cube3.position.y+=size;
+            cube2.position.y+=2*size;
+            World.rotateChecker=2;
+        }
+    }
+
+    private boolean clearToRotate1() {
+        if(cube1.position.y>=World.endOfHeight){
+            return false;
+        }else{
+            for(Cube t: World.tetrominos){
+                if(t.position.x==cube2.position.x &&
+                        (t.position.y==cube2.position.y+size || t.position.y==cube2.position.y+2*size  )){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void rotate2() {
+//           [4]
+//        [1][3]             [1]
+//           [2]    ----> [2][3][4]
+        if(clearToRotate2()){
+            cube3.position.x-=size;
+            cube3.position.y+=size;
+            cube2.position.x-=2*size;
+            cube4.position.y+=2*size;
+            World.rotateChecker=3;
+        }
+    }
+
+    private boolean clearToRotate2() {
+        if(cube3.position.x>=World.endOfWidth){
+            return false;
+        }else {
+            for(Cube t: World.tetrominos){
+                if(t.position.y==cube2.position.y &&
+                        (t.position.x==cube1.position.x || t.position.x==cube1.position.x-size  )){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void rotate3() {
+//              [1]
+//           [2][3][4]  --->  [2]
+//                            [3][1]
+//                            [4]
+        if(clearToRotate3()){
+            cube3.position.x-=size;
+            cube3.position.y-=size;
+            cube2.position.y-=2*size;
+            cube4.position.x-=2*size;
+
+            World.rotateChecker=4;
+        }
+
+    }
+
+    private boolean clearToRotate3() {
+        for(Cube t: World.tetrominos){
+        if(t.position.x==cube2.position.x &&
+                (t.position.y==cube2.position.y-size || t.position.y==cube2.position.y-2*size  )){
+            return false;
+        }
+    }
+        return true;
+    }
+
+    @Override
+    public void rotate4() {
+//        [2]
+//        [3][1]
+//        [4]      ---> [4][3][2]
+//                         [1]
+        if(clearToRotate4()){
+            cube3.position.x+=size;
+            cube3.position.y-=size;
+            cube2.position.x+=2*size;
+            cube4.position.y-=2*size;
+            World.rotateChecker=1;
+        }
+
+    }
+
+    private boolean clearToRotate4() {
+        if(cube1.position.x>=World.endOfWidth){
+            return false;
+        }else{
+            for(Cube t: World.tetrominos){
+                if(t.position.y==cube2.position.y &&
+                        (t.position.x==cube1.position.x || t.position.x==cube1.position.x+size  )){
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 }
-class JPiece extends Tetromino implements methods{
+class JPiece extends Tetromino{
 // is shaped like a mirror-reversed 'L' and consists of three blocks in a row with one added above the left side.
-public void landed(World w, double time) {
+//              [4]
+//              [3]
+//           [2][1]
 
-}
+    public JPiece(){
+        color = new Color(rand.nextFloat(), rand.nextFloat(), rand.nextFloat());
+        cube1=new Cube(color);
 
-    @Override
-    public void update(World w, double time){
-        position = position.add(velocity.times(time));
-        velocity = velocity.add(acceleration.times(time));
-        landed(w, time);
-    }
-}
-class LPiece extends Tetromino implements methods{
-    //This piece is shaped like the letter 'L',
-    // composed of three blocks in a row with one added above the right side.
+        cube2=new Cube(color);
+        cube2.position.x=cube1.position.x-size;
+        cube2.position.y=cube1.position.y;
 
-    public void landed(World w, double time) {
+        cube3=new Cube(color);
+        cube3.position.x=cube1.position.x;
+        cube3.position.y=cube1.position.y-size;
 
-    }
-
-    @Override
-    public void update(World w, double time){
-        position = position.add(velocity.times(time));
-        velocity = velocity.add(acceleration.times(time));
-        landed(w, time);
-    }
-}
-class SPiece extends Tetromino implements methods{
-//It consists of two stacked horizontal dimers (two blocks together) offset by one block.
-// When viewed from above, it forms the letter 'S'.
-public void landed(World w, double time) {
-
-}
-
-    @Override
-    public void update(World w, double time){
-        position = position.add(velocity.times(time));
-        velocity = velocity.add(acceleration.times(time));
-        landed(w, time);
-    }
-}
-class ZPiece extends Tetromino implements methods{
-//This is the mirror image of the 'S' piece,
-// consisting of two stacked horizontal dimers offset by one block,
-// which forms a 'Z' when viewed from above.
-    @Override
-    public void landed(World w, double time) {
-
+        cube4=new Cube(color);
+        cube4.position.x=cube3.position.x;
+        cube4.position.y=cube3.position.y-size;
     }
 
     @Override
-    public void update(World w, double time){
-        position = position.add(velocity.times(time));
-        velocity = velocity.add(acceleration.times(time));
-        landed(w, time);
+    public void rotate1() {
+        //      [4]
+//              [3]       [3]
+//           [2][1]   --->[2][1][4]
+        if(clearToRotate1()){
+            cube3.position.x-=size;
+            cube4.position.x+=size;
+            cube4.position.y+=2*size;
+            World.rotateChecker=2;
+        }
+
+    }
+
+    private boolean clearToRotate1() {
+        if(cube1.position.x>=World.endOfWidth){
+            return false;
+        }else{
+            for(Cube t: World.tetrominos){
+                if(t.position.x==cube2.position.x && t.position.y==cube3.position.y){
+                    return false;
+                }
+                if(t.position.x==cube1.position.x+size && t.position.y==cube2.position.y){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void rotate2() {
+        //[3]
+        //[2][1][4] ---> [2][1]
+//                       [3]
+//                       [4]
+        if(clearToRotate2()){
+            cube3.position.y+=2*size;
+            cube4.position.x-=2*size;
+            cube4.position.y+=2*size;
+            World.rotateChecker=3;
+        }
+
+    }
+
+    private boolean clearToRotate2() {
+        if(cube2.position.y>=World.endOfHeight){
+            return false;
+        }else {
+            for(Cube t: World.tetrominos){
+                if(t.position.x==cube2.position.x &&
+                        (t.position.y==cube2.position.y+size || t.position.y==cube2.position.y+2*size  )){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void rotate3() {
+//        [2][1]
+//        [3]
+//        [4]   -->   [2][1][3]
+//                          [4]
+        if(clearToRotate3()){
+            cube4.position.x+=2*size;
+            cube3.position.x+=2*size;
+            cube4.position.y-=size;
+            cube3.position.y-=size;
+            World.rotateChecker=4;
+        }
+    }
+
+    private boolean clearToRotate3() {
+        if(cube1.position.x>=World.endOfWidth){
+            return false;
+        }else{
+            for(Cube t: World.tetrominos){
+                if(t.position.x==cube1.position.x+size &&
+                        (t.position.y==cube2.position.y+size || t.position.y==cube2.position.y  )){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void rotate4() {
+
+//                           [4]
+//                           [3]
+//        [2][1][3]  ---> [2][1]
+//              [4]
+        if(clearToRotate4()){
+            cube4.position.x-=size;
+            cube3.position.x-=size;
+            cube4.position.y-=3*size;
+            cube3.position.y-=size;
+            World.rotateChecker=1;
+        }
+
+    }
+
+    private boolean clearToRotate4() {
+        for(Cube t: World.tetrominos){
+            if(t.position.x==cube1.position.x &&
+                    (t.position.y==cube1.position.y-size || t.position.y==cube1.position.y-2*size  )){
+                return false;
+            }
+        }
+        return true;
+    }
+}
+class LPiece extends Tetromino {
+    //              [4]
+//                  [3]
+//                  [2][1]
+    public LPiece(){
+        color = new Color(rand.nextFloat(), rand.nextFloat(), rand.nextFloat());
+        cube1=new Cube(color);
+
+        cube2=new Cube(color);
+        cube2.position.x=cube1.position.x-size;
+        cube2.position.y=cube1.position.y;
+
+        cube3=new Cube(color);
+        cube3.position.x=cube2.position.x;
+        cube3.position.y=cube2.position.y-size;
+
+        cube4=new Cube(color);
+        cube4.position.x=cube2.position.x;
+        cube4.position.y=cube3.position.y-size;
+    }
+
+    @Override
+    public void rotate1() {
+        //              [4]
+//                      [3]
+//                      [2][1]  ---> [2][1][4]
+        //                           [3]
+        if(clearToRotate1()){
+            cube4.position.x+=2*size;
+            cube4.position.y+=2*size;
+            cube3.position.y+=2*size;
+            World.rotateChecker=2;
+        }
+    }
+
+    private boolean clearToRotate1() {
+        if(cube2.position.y>=World.endOfHeight || cube1.position.x>=World.endOfWidth){
+            return false;
+        }else{
+            for(Cube t: World.tetrominos){
+                if(t.position.y==cube1.position.y && t.position.x==cube1.position.x+size){
+                    return false;
+                }
+                if(t.position.x==cube2.position.x && t.position.y==cube2.position.y+size){
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    @Override
+    public void rotate2() {
+//          [2][1][4]  -->  [2][1]
+//          [3]                [3]
+//                             [4]
+        if(clearToRotate2()){
+            cube3.position.x+=size;
+            cube4.position.x-=size;
+            cube4.position.y+=2*size;
+            World.rotateChecker=3;
+        }
+
+     }
+
+    private boolean clearToRotate2() {
+        if(cube3.position.y>=World.endOfHeight){
+            return false;
+        }else{
+            for(Cube t: World.tetrominos){
+                if(t.position.x==cube1.position.x &&
+                        (t.position.y==cube1.position.y+size || t.position.y==cube1.position.y+2*size)){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void rotate3() {
+//       [2][1]
+//          [3]            [4]
+//          [4] ---> [2][1][3]
+        if(clearToRotate3()){
+            cube4.position.x+=size;
+            cube4.position.y-=3*size;
+            cube3.position.x+=size;
+            cube3.position.y-=size;
+            World.rotateChecker=4;
+        }
+    }
+
+    private boolean clearToRotate3() {
+        if(cube3.position.x>=World.endOfWidth){
+            return false;
+        }else{
+            for(Cube t: World.tetrominos){
+                if(t.position.x==cube1.position.x+size &&
+                        (t.position.y==cube1.position.y || t.position.y==cube1.position.y+size)){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void rotate4() {
+        //            [4]
+        //      [2][1][3]  ---> [4]
+        //                      [3]
+        //                      [2][1]
+        if(clearToRotate4()){
+            cube3.position.x-=2*size;
+            cube3.position.y-=size;
+            cube4.position.x-=2*size;
+            cube4.position.y-=size;
+            World.rotateChecker=1;
+        }
+    }
+
+    private boolean clearToRotate4() {
+        for(Cube t: World.tetrominos){
+            if(t.position.x==cube2.position.x &&
+                    (t.position.y==cube2.position.y+size || t.position.y==cube2.position.y+2*size)){
+                return false;
+            }
+        }
+        return true;
+    }
+}
+class SPiece extends Tetromino {
+    //              [4][3]
+//               [2][1]
+
+    public SPiece(){
+        color = new Color(rand.nextFloat(), rand.nextFloat(), rand.nextFloat());
+
+        cube1=new Cube(color);
+
+        cube2=new Cube(color);
+        cube2.position.x=cube1.position.x-size;
+        cube2.position.y=cube1.position.y;
+
+        cube3=new Cube(color);
+        cube3.position.x=cube1.position.x+size;
+        cube3.position.y=cube1.position.y-size;
+
+        cube4=new Cube(color);
+        cube4.position.x=cube1.position.x;
+        cube4.position.y=cube3.position.y;
+    }
+
+    @Override
+    public void rotate1() {
+        //              [4][3]        [4]
+//                   [2][1]     ----> [2][1]
+        //                               [3]
+        if(clearToRotate1()){
+            cube4.position.x-=size;
+            cube3.position.y+=2*size;
+            cube3.position.x-=size;
+            World.rotateChecker=2;
+        }
+
+    }
+
+    private boolean clearToRotate1() {
+        for(Cube t: World.tetrominos){
+            if(t.position.x==cube2.position.x && t.position.y==cube4.position.y){
+                return false;
+            }
+            if(t.position.x==cube1.position.x && t.position.y==cube1.position.y+size){
+                return false;
+            }
+            if(cube2.position.y>=World.endOfHeight){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void rotate2() {
+//        [4]
+//        [2][1]           [2][1]
+//           [3]   ---> [3][4]
+        if(clearToRotate2()){
+            cube3.position.x-=2*size;
+            cube4.position.y+=2*size;
+
+            World.rotateChecker=3;
+        }
+    }
+
+    private boolean clearToRotate2() {
+        for(Cube t: World.tetrominos){
+            if(t.position.y==cube4.position.y && t.position.x==cube2.position.x-size){
+                return false;
+            }
+            if(cube4.position.x<=World.startOfWidth){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void rotate3() {
+        //      [2][1]        [4]
+//           [3][4]      ---> [2][1]
+        //                       [3]
+        if(clearToRotate3()){
+            cube4.position.y-=2*size;
+            cube3.position.x+=2*size;
+            World.rotateChecker=4;
+        }
+    }
+
+    private boolean clearToRotate3() {
+        for(Cube t: World.tetrominos){
+            if(t.position.x==cube2.position.x && t.position.y==cube2.position.y-size){
+                return false;
+            }
+            if(t.position.x==cube1.position.x && t.position.y==cube1.position.y+size){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void rotate4() {
+        //    [4]
+        //    [2][1]
+        //       [3]
+
+        //          [4][3]
+//               [2][1]
+        if(clearToRotate4()){
+            cube4.position.x+=size;
+            cube3.position.y-=2*size;
+            cube3.position.x+=size;
+
+            World.rotateChecker=1;
+        }
+    }
+
+    private boolean clearToRotate4() {
+        for(Cube t: World.tetrominos){
+            if(t.position.x==cube2.position.x-size && t.position.y==cube4.position.y){
+                return false;
+            }
+            if(cube4.position.x<=World.startOfWidth){
+                return false;
+            }
+        }
+        return true;
+    }
+}
+class ZPiece extends Tetromino {
+    //              [4][3]
+//                     [2][1]
+public ZPiece(){
+
+    color = new Color(rand.nextFloat(), rand.nextFloat(), rand.nextFloat());
+
+    cube1=new Cube(color);
+
+    cube2=new Cube(color);
+    cube2.position.x=cube1.position.x-size;
+    cube2.position.y=cube1.position.y;
+
+    cube3=new Cube(color);
+    cube3.position.x=cube2.position.x;
+    cube3.position.y=cube2.position.y-size;
+
+    cube4=new Cube(color);
+    cube4.position.x=cube3.position.x-size;
+    cube4.position.y=cube3.position.y;
+}
+
+    @Override
+    public void rotate1() {
+        //              [4][3]              [4]
+//                         [2][1]  ----> [2][1]
+ //                                      [3]
+
+        if(clearToRotate1()){
+            cube4.position.x=cube1.position.x;
+            cube3.position.y=cube2.position.y+size;
+            World.rotateChecker=2;
+        }
+    }
+
+    private boolean clearToRotate1() {
+         for(Cube t: World.tetrominos){
+             if(t.position.x==cube1.position.x && t.position.y==cube4.position.y){
+                 return false;
+             }
+             if(t.position.x==cube2.position.x && t.position.y== cube2.position.y+size){
+                 return false;
+             }
+             if(cube2.position.y==World.endOfHeight){
+                 return false;
+             }
+         }
+         return true;
+    }
+
+    @Override
+    public void rotate2() {
+    //             [4]      [4][3]
+        //      [2][1]    ---> [2][1]
+        //      [3]
+        if(clearToRotate2()){
+            cube4.position.x=cube2.position.x-size;
+            cube3.position.x=cube2.position.x;
+            cube3.position.y=cube4.position.y;
+            World.rotateChecker=3;
+        }
+
+    }
+
+    private boolean clearToRotate2() {
+        for(Cube t: World.tetrominos){
+            if(t.position.y==cube4.position.y && t.position.x==cube2.position.x-size){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void rotate3() {
+    //        [4][3]              [3]
+        //       [2][1]  ----> [2][1]
+        //                     [4]
+        //
+
+        if(clearToRotate3()){
+            cube3.position.x+=size;
+            cube4.position.y=cube2.position.y+size;
+            cube4.position.x=cube2.position.x;
+            World.rotateChecker=4;
+        }
+    }
+
+    private boolean clearToRotate3() {
+        for(Cube t: World.tetrominos){
+            if((t.position.x==cube3.position.x +size &&  t.position.y ==cube3.position.y)||
+                    (t.position.x==cube2.position.x && t.position.y==cube2.position.y +size )){
+                return false;
+            }
+            if(cube2.position.y==World.endOfHeight){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void rotate4() {
+    //            [3]
+        //     [2][1]            [4][3]
+        //     [4]                 [2][1]
+        if(clearToRotate4()){
+           cube4.position.y-=size;
+           cube4.position.x-=size;
+           cube3.position.y+=size;
+           cube3.position.x-=size;
+           cube1.position.y+=size;
+           cube2.position.y+=size;
+
+            World.rotateChecker=1;
+        }
+    }
+
+    private boolean clearToRotate4() {
+        for(Cube t: World.tetrominos){
+            if(t.position.y==cube4.position.y &&
+                    (t.position.x==cube1.position.x || t.position.x==cube1.position.x+size)){
+                return false;
+            }
+
+        }
+        return true;
     }
 }
 
-class World{
-    int height;
-    int width;
-    Tetromino currentPiece;
+class World {
+    static int height, startOfHeight, endOfHeight;
+
+    static int width, startOfWidth, endOfWidth;
+    Tetromino piece;
+    static int sizeOfCubes=30;
+    static boolean gameOver;
+    static int rotateChecker;
 
     //when we add a block to the array we will add the cubes that make up the block
-    ArrayList<Cube> tetrominos;
+    static ArrayList<Cube> tetrominos;
+    private int timer;
+    private int timer1;
+    //private int timer;
 
-    public World(int initWidth, int initHeight){
+
+    public World(int initWidth, int initHeight) {
         width = initWidth;
         height = initHeight;
-        tetrominos=new ArrayList<Cube>();
-        currentPiece=new Cube();
+        tetrominos = new ArrayList<>();
+        gameOver=false;
+        rotateChecker=1;
+        startOfHeight=9*sizeOfCubes;
+        endOfHeight=height - 2*sizeOfCubes;
+        startOfWidth=2*sizeOfCubes;
+        endOfWidth=width-sizeOfCubes;
+
+        //create a new random piece to be our current piece
+        piece = newRandomPiece();
+
+        timer=-50;
+        timer1=0;
+        for(int i=0; i<5; i++) {
+            Random rand = new Random();
+
+            Cube starter = new Cube(new Color(rand.nextFloat(), rand.nextFloat(), rand.nextFloat()));
+            starter.setPosition(new Pair(startOfWidth+i*i*sizeOfCubes, endOfHeight));
+            starter.setVelocity(new Pair(0, 0));
+            tetrominos.add(starter);
+
+            Cube end = new Cube(new Color(rand.nextFloat(), rand.nextFloat(), rand.nextFloat()));
+
+            end.setPosition(new Pair(endOfWidth-i*i*sizeOfCubes, endOfHeight));
+            end.setVelocity(new Pair(0, 0));
+            tetrominos.add(end);
+        }
+
+    }
+
+    public static Tetromino newRandomPiece() {
+        //generate a random number from 0 to 6 and creates a piece based on the number
+            Tetromino t=null;
+            int n= (int) (Math.random()*7);
+
+            if(n==0){t= new LinePiece();}
+            if(n==1){t= new SquarePiece();}
+            if(n==2){t= new TPiece();}
+            if(n==3){t= new ZPiece();}
+            if(n==4){t= new SPiece();}
+            if(n==5){t= new LPiece();}
+            if(n==6){t= new JPiece();}
+            ThreeDTetris.keepMovingDown=true;
 
 
-            Cube cube=new Cube();
-            cube.setPosition(new Pair(500-2*cube.size, height-2* cube.size+1));
-            cube.setVelocity(new Pair(0,0));
-            tetrominos.add(cube);
+            //Change to t
+            return  t;
+    }
 
+    public static void addCubes(ArrayList<Cube> tetrominos, Tetromino piece) {
+
+
+        tetrominos.add(piece.cube1);
+        tetrominos.add(piece.cube2);
+        tetrominos.add(piece.cube3);
+        tetrominos.add(piece.cube4);
+
+        if(piece.cube1.position.y>endOfHeight || piece.cube2.position.y>endOfHeight ||
+                piece.cube3.position.y>endOfHeight || piece.cube4.position.y>endOfHeight) {
+
+            //piece.cube1.position.y = roundToNearestMultipleOfSize(piece.cube1.position.y)-sizeOfCubes;
+            piece.cube1.position.y=roundToLowerMultipleOfSize(piece.cube1.position.y);
+            piece.cube2.position.y = roundToNearestMultipleOfSize(piece.cube2.position.y);
+            piece.cube3.position.y = roundToNearestMultipleOfSize(piece.cube3.position.y);
+            piece.cube4.position.y = roundToNearestMultipleOfSize(piece.cube4.position.y);
+        }else {
+            //you want to align the cubes along the y-axis
+        piece.cube1.position.y=roundToLowerMultipleOfSize(piece.cube1.position.y);
+        piece.cube2.position.y=roundToLowerMultipleOfSize(piece.cube2.position.y);
+        piece.cube3.position.y=roundToLowerMultipleOfSize(piece.cube3.position.y);
+        piece.cube4.position.y=roundToLowerMultipleOfSize(piece.cube4.position.y);
+        }
+    }
+
+    //MOVE THIS METHOD TO CUBE CLASS
+    public  boolean landsOnOtherCube( Cube cube) {
+        //this checks if any cube in our current piece stops on top of another cube
+
+        for(Cube t: World.tetrominos){
+            if ( cube.position.x >t.position.x-cube.size/2 && cube.position.x <t.position.x+cube.size/2 &&
+                         cube.position.y> t.position.y -2* cube.size && cube.position.y<t.position.y) {
+                cube.keepMoving=false;
+                ThreeDTetris.keepMovingDown =false;
+                return true;
+
+            }
+
+        }
+        return false;
+    }
+    //MOVE THIS METHOD TO CUBE CLASS
+    public static double roundToLowerMultipleOfSize(double number) {
+        // Calculate the nearest multiple of size
+        double remainder = number % sizeOfCubes;
+        return  number - remainder;
+    }
+    //MOVE THIS METHOD TO CUBE CLASS
+    public static double roundToNearestMultipleOfSize(double number) {
+        // Calculate the nearest multiple of size
+        double remainder = number % sizeOfCubes;
+        double nearestMultiple = number - remainder;
+
+        // Determine whether to round up or down based on the remainder
+        if (remainder >= sizeOfCubes/2 && nearestMultiple< height-2*sizeOfCubes) {
+            nearestMultiple += sizeOfCubes;
+        }
+        return nearestMultiple;
 
     }
 
     public void drawTetrominos(Graphics g) {
+        for(int i=startOfWidth-sizeOfCubes; i<endOfWidth; i=i+sizeOfCubes) {
+            g.setColor(Color.black);
+            g.drawRect(i, startOfHeight, sizeOfCubes, endOfHeight - startOfHeight);
+            //g.setColor(Color.cyan);
+            g.drawRect(i, 0, sizeOfCubes, startOfHeight);
+        }
+        g.setColor(Color.cyan);
+        g.fillRect(width-5*sizeOfCubes,0, 5*sizeOfCubes, 5*sizeOfCubes);
 
         // Sort the tetrominos ArrayList based on x positions in descending order, to avoid overlaps when drawn
-        Collections.sort(tetrominos, new Comparator<Cube>() {
-            @Override
-            public int compare(Cube cube1, Cube cube2) {
-                // Compare cubes based on their x positions in descending order
-                return Double.compare(cube2.getPosition().x, cube1.getPosition().x);
-            }
-        });
-
-        //THIS AVOIDS OVERLAPPING
-        for(Cube cube:tetrominos){
-           if(cube.position.x>currentPiece.position.x){
-               cube.draw(g);
-           }
-        }
-        for(Cube cube:tetrominos){
-            if(cube.position.x==currentPiece.position.x){
-                cube.draw(g);
-            }
-        }
-        currentPiece.draw(g);
-        for(Cube cube:tetrominos){
-            if(cube.position.x<currentPiece.position.x){
-                cube.draw(g);
-            }
+        ArrayList<Cube>allCubes=new ArrayList<>();
+        allCubes.addAll(tetrominos);
+        allCubes.add(piece.cube1);
+        allCubes.add(piece.cube2);
+        allCubes.add(piece.cube3);
+        allCubes.add(piece.cube4);
+        Collections.sort(allCubes, new Comparator<Cube>() {
+                    @Override
+                    public int compare(Cube cube1, Cube cube2) {
+                        if(cube1.position.y!=cube2.position.y){
+                            return Double.compare(cube2.position.y, cube1.position.y);
+                        }
+                        // Compare cubes based on their x positions in descending order
+                        return Double.compare(cube2.getPosition().x, cube1.getPosition().x);
+                    }
+                }
+        );
+        for(Cube cube:allCubes){
+            cube.draw(g);
         }
 
 
     }
 
+    public void updateTetrominos() {
+        //first align all the cubes before we start moving them
+        piece.cube1.position.y=roundToNearestMultipleOfSize(piece.cube1.position.y);
+        piece.cube2.position.y=roundToNearestMultipleOfSize(piece.cube2.position.y);
+        piece.cube3.position.y=roundToNearestMultipleOfSize(piece.cube3.position.y);
+        piece.cube4.position.y=roundToNearestMultipleOfSize(piece.cube4.position.y);
+        timer++;
 
-    //WE DON'T NEED THIS METHOD ?
-    public void updateTetrominos(double time){
-       currentPiece.update(this,time);
+        if(piece.cube1.position.y<height-2.5*sizeOfCubes &&
+                piece.cube2.position.y<height-2.5*sizeOfCubes &&
+                piece.cube3.position.y<height-2.5*sizeOfCubes &&
+                piece.cube4.position.y<height-2.5*sizeOfCubes ) {
 
-       //CHECK FOR COMPLETE ROWS AND DESTROY THEM
-//        for (Cube t:tetrominos) {
-//            t.update(this, time);
-//        }
+
+            if (timer > 20) {
+                piece.cube1.update(this, 0.5);
+                piece.cube2.update(this, 0.5);
+                piece.cube3.update(this, 0.5);
+                piece.cube4.update(this, 0.5);
+
+                timer = 0;
+            }
+        }else{
+            if (timer > 50) {
+                piece.cube1.update(this, 0.5);
+                piece.cube2.update(this,0.5);
+                piece.cube3.update(this,0.5);
+                piece.cube4.update(this, 0.5);
+                timer = 0;
+            }
+        }
+        timer1++;
+        if (timer1>5) {
+            checkIfAnyLevelIsFullAndDelete();
+            timer1=0;
+        }
+    }
+
+
+        //This checks if any cube is above the limit of our window and ends the game
+        public static void isGameOver() {
+        for (Cube t: tetrominos){
+            if (t.position.y < startOfHeight) {
+                gameOver = true;
+                break;
+            }
+        }
+    }
+
+    private void checkIfAnyLevelIsFullAndDelete() {
+        int[]filledRows=new int[]{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+
+        //this keeps track of filled rows
+        for(int row=startOfHeight; row<=endOfHeight; row=row+sizeOfCubes){
+            for(Cube t: tetrominos){
+                if(t.position.y ==row){
+                    filledRows[(row-startOfHeight)/sizeOfCubes]++;
+                }
+            }
+        }
+        for(int i=0; i<filledRows.length; i++){
+            //this checks if a row is filled up
+            if(filledRows[i]==28) {
+                Iterator<Cube>deleteIterator= tetrominos.iterator();
+                while (deleteIterator.hasNext()){
+                    //This removes any cube on the filled up row
+
+                    Cube cube =deleteIterator.next();
+                    if((cube.position.y-startOfHeight)/sizeOfCubes==i){
+                        deleteIterator.remove();
+                    }
+                    //This drops any cube above the filled up row
+
+                    if((cube.position.y-startOfHeight)/sizeOfCubes<i){
+                        cube.position.y+=sizeOfCubes;
+                    }
+
+                    //Check for hanging cubes???
+                }
+            }
+        }
     }
 }
 
 public class ThreeDTetris extends JPanel implements KeyListener{
-    public static final int WIDTH = 1024;
-    public static final int HEIGHT = 768;
+    public static final int WIDTH = World.sizeOfCubes*30;
+    public static final int HEIGHT = World.sizeOfCubes*25;
     public static final int FPS = 60;
     World world;
+    static boolean keepMovingDown;
+
 
     class Runner implements Runnable{
         public void run() {
             while(true){
-                world.updateTetrominos(1.0 / (double)FPS);
+                world.updateTetrominos();
                 repaint();
                 try{
                     Thread.sleep(1000/FPS);
                 }
                 catch(InterruptedException e){}
             }
-
         }
-
     }
-
-
     public void keyPressed(KeyEvent e) {
         char c = e.getKeyChar();
-        System.out.println("You pressed down: " + c);
+
+
     }
 
     public void keyReleased(KeyEvent e) {
+        char c = e.getKeyChar();
+        if (c == 's' || c == 'S') {
+            int n = World.sizeOfCubes;
+            if (keepMovingDown && notCloseToAnotherCube()) {
+                //you are able to change position as long as you are allowed to keep moving down
+                //and if the piece hasn't landed on another piece
+                if (world.piece.cube1.position.y < World.endOfHeight-n) {
 
-        char c=e.getKeyChar();
-        if(c=='a' || c=='A'){
-
-            if(world.currentPiece.position.x>0 && world.currentPiece.position.x<world.width-60 && !touchingOtherSides2()) {
-                //ONLY MOVE BLOCK SIDEWAYS IF THERE IS NO WALL  OR ANY OTHER BLOCK
-                world.currentPiece.position.x -= 2*world.currentPiece.size;
+                    world.piece.cube1.position.y += n;
+                    world.piece.cube2.position.y += n;
+                    world.piece.cube3.position.y += n;
+                    world.piece.cube4.position.y += n;
+                }
             }
         }
-        if(c=='d' || c=='D'){
-            if(world.currentPiece.position.x>0 && world.currentPiece.position.x<world.width-60 && !touchingOtherSides1()) {
-                world.currentPiece.position.x += 2*world.currentPiece.size;
+        double n = world.piece.size;
+        if (c == 'd' || c == 'D') {
+
+            if (lessThanWidth()) {
+                if (rightHorizontalPlane() && notTouchingAnyCubeOnTheRight()) {
+                    //you can only move the current piece to the right if its not touching other pieces on the right
+                    world.piece.cube1.position.x += n;
+                    world.piece.cube2.position.x += n;
+                    world.piece.cube3.position.x += n;
+                    world.piece.cube4.position.x += n;
+                }
+
+                //WEIRD THINGS HAPPEN AT THE BOTTOM ROW
+                if (world.piece.cube1.position.y == World.endOfHeight ||
+                        world.piece.cube2.position.y == World.endOfHeight ||
+                        world.piece.cube3.position.y == World.endOfHeight ||
+                        world.piece.cube4.position.y == World.endOfHeight) {
+
+                    if (positionOnTheRightIsEmpty()) {
+                        world.piece.cube1.position.x += n;
+                        world.piece.cube2.position.x += n;
+                        world.piece.cube3.position.x += n;
+                        world.piece.cube4.position.x += n;
+                    }
+                }
+
+                //Allowed to move when we land on top of another cube
+                if (weAreOnTopOfAnotherCube()) {
+                    if (positionOnTheRightIsEmpty()) {
+                        world.piece.cube1.position.x += n;
+                        world.piece.cube2.position.x += n;
+                        world.piece.cube3.position.x += n;
+                        world.piece.cube4.position.x += n;
+                    }
+                }
             }
         }
+
+        if (c == 'a' || c == 'A') {
+            if(greaterThanStart()){
+
+            if (rightHorizontalPlane() && notTouchingAnyCubeOnTheLeft()) {
+
+                world.piece.cube1.position.x -= n;
+                world.piece.cube2.position.x -= n;
+                world.piece.cube3.position.x -= n;
+                world.piece.cube4.position.x -= n;
+
+            }
+            //WEIRD THINGS HAPPEN AT THE BOTTOM ROW
+            if (world.piece.cube1.position.y == World.endOfHeight ||
+                    world.piece.cube2.position.y == World.endOfHeight ||
+                    world.piece.cube3.position.y == World.endOfHeight||
+                    world.piece.cube4.position.y == World.endOfHeight) {
+
+                if (positionOnTheLeftIsEmpty()) {
+                    world.piece.cube1.position.x -= n;
+                    world.piece.cube2.position.x -= n;
+                    world.piece.cube3.position.x -= n;
+                    world.piece.cube4.position.x -= n;
+                }
+            }
+            //IT'S HARD TO MOVE A PIECE ONCE IT HAS LANDED ON ANOTHER PIECE
+            if (weAreOnTopOfAnotherCube()) {
+                if (positionOnTheLeftIsEmpty()) {
+                    world.piece.cube1.position.x -= n;
+                    world.piece.cube2.position.x -= n;
+                    world.piece.cube3.position.x -= n;
+                    world.piece.cube4.position.x -= n;
+                }
+            }
+
+        }
+
+    }
+        if(c=='r' || c=='R'){
+            if(World.rotateChecker==1){
+                world.piece.rotate1();
+
+            }else
+            if(World.rotateChecker==2){
+                world.piece.rotate2();
+
+            }else
+            if(World.rotateChecker==3){
+                world.piece.rotate3();
+
+            }else
+            if(World.rotateChecker==4){
+                world.piece.rotate4();
+
+            }
+
+        }
+
     }
 
-    private boolean touchingOtherSides1() {
-        for(Tetromino t: world.tetrominos) {
-            double distance =world.currentPiece.position.x-t.position.x;
+    private boolean weAreOnTopOfAnotherCube() {
+        ArrayList<Cube>cubeArrayList=new ArrayList<>();
+        cubeArrayList.add(world.piece.cube1);
+        cubeArrayList.add(world.piece.cube2);
+        cubeArrayList.add(world.piece.cube3);
+        cubeArrayList.add(world.piece.cube4);
 
-
-            if (world.currentPiece.position.y+2*t.size > t.position.y ) {
-                //first check if the spheres are on the same horizontal level
-
-                if(distance<0) {
-                    if (Math.abs(distance )< 2.5 * t.size) {
-                        return true;
-                    }
+        for(Cube cube : cubeArrayList){
+            for(Cube t: World.tetrominos){
+                if(t.position.y==cube.position.y+World.sizeOfCubes && t.position.x==cube.position.x){
+                    return true;
                 }
             }
         }
         return false;
     }
-    private boolean touchingOtherSides2() {
-        for(Tetromino t: world.tetrominos) {
-            double distance =world.currentPiece.position.x-t.position.x;
 
-            if (world.currentPiece.position.y+2*t.size > t.position.y ) {
-                //first check if the spheres are on the same horizontal level                //first check if the spheres are on the same horizontal level
-                if(distance>0){
-                    if(distance<2.5*t.size){
-                        return true;
-                    }
+    //THIS CHECKS IF WE CAN MOVE A PIECE THAT'S AT THE BOTTOM TO THE RIGHT
+    private boolean positionOnTheRightIsEmpty(){
+        ArrayList<Cube>cubeArrayList=new ArrayList<>();
+        cubeArrayList.add(world.piece.cube1);
+        cubeArrayList.add(world.piece.cube2);
+        cubeArrayList.add(world.piece.cube3);
+        cubeArrayList.add(world.piece.cube4);
+
+        for(Cube cube: cubeArrayList){
+            double positionToMove=cube.position.x+World.sizeOfCubes;
+            for(Cube t: World.tetrominos){
+                if( t.position.y==cube.position.y && t.position.x==positionToMove){
+                    return false;
                 }
             }
         }
-        return false;
+        return true;
+    }
+    //THIS CHECKS IF WE CAN MOVE A PIECE THAT'S AT THE BOTTOM TO THE LEFT
+    private boolean positionOnTheLeftIsEmpty(){
+        ArrayList<Cube>cubeArrayList=new ArrayList<>();
+        cubeArrayList.add(world.piece.cube1);
+        cubeArrayList.add(world.piece.cube2);
+        cubeArrayList.add(world.piece.cube3);
+        cubeArrayList.add(world.piece.cube4);
+
+        for(Cube cube: cubeArrayList){
+            double positionToMove=cube.position.x-World.sizeOfCubes;
+            for(Cube t: World.tetrominos){
+                if(t.position.y==cube.position.y && t.position.x==positionToMove){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    //THIS CHECKS IF THE CUBES ARE ON THE RIGHT HORIZONTAL PLANE, YOU DONT WANT TO MOVE A CUBE INTO THE HALF OF ANOTHER CUBE
+    private  boolean rightHorizontalPlane(){
+        return world.piece.cube1.position.y % World.sizeOfCubes == 0 &&
+                world.piece.cube2.position.y % World.sizeOfCubes == 0 &&
+                world.piece.cube3.position.y % World.sizeOfCubes == 0 &&
+                world.piece.cube4.position.y % World.sizeOfCubes == 0;
+    }
+    private boolean notCloseToAnotherCube() {
+        //this checks if any cube is close to any other cube
+
+
+        ArrayList<Cube>cubeArrayList=new ArrayList<>();
+        cubeArrayList.add(world.piece.cube1);
+        cubeArrayList.add(world.piece.cube2);
+        cubeArrayList.add(world.piece.cube3);
+        cubeArrayList.add(world.piece.cube4);
+
+        for(Cube cube: cubeArrayList) {
+            for (Cube t : World.tetrominos) {
+                if (cube.position.x > t.position.x - cube.size / 2 && cube.position.x < t.position.x + cube.size / 2) {
+
+                    if (cube.position.y > t.position.y - 3 * World.sizeOfCubes) {
+
+                        return false;
+                    }
+
+                }
+
+            }
+        }
+        return true;
+    }
+
+    private boolean greaterThanStart(){
+        //this checks if the current piece is within the left side bounds of our window
+        // starts at 2*sizeOfCubes
+        double n = World.sizeOfCubes;
+        if(world.piece.cube1.position.x<2.5*n){
+            return false;
+        }
+        if(world.piece.cube2.position.x<2.5*n){
+            return false;
+        }
+        if(world.piece.cube3.position.x<2.5*n){
+            return false;
+        }
+        return !(world.piece.cube4.position.x < 2.5 * n);
+    }
+    private boolean lessThanWidth(){
+        //this checks if the current piece is within the left side bounds of our window
+        //ends at width-2*sizeOfCubes
+        double n = world.width-1.5*World.sizeOfCubes;
+
+        if(world.piece.cube1.position.x>n){
+            return false;
+        }
+        if(world.piece.cube2.position.x>n){
+            return false;
+        }
+        if(world.piece.cube3.position.x>n){
+            return false;
+        }
+        return !(world.piece.cube4.position.x > n);
+    }
+    private boolean notTouchingAnyCubeOnTheRight() {
+        //This checks if any cube in current piece is touching any other cube to the right
+        ArrayList<Cube>cubeArrayList=new ArrayList<>();
+        cubeArrayList.add(world.piece.cube1);
+        cubeArrayList.add(world.piece.cube2);
+        cubeArrayList.add(world.piece.cube3);
+        cubeArrayList.add(world.piece.cube4);
+
+        for(Cube cube: cubeArrayList) {
+            int n = World.sizeOfCubes;
+            for (Cube t : World.tetrominos) {
+                if(cube.position.y==t.position.y && cube.position.x>t.position.x-1.5*n && cube.position.x<t.position.x-0.5*n){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    private boolean notTouchingAnyCubeOnTheLeft() {
+        //This checks if any cube in current piece is touching any other cube on their right wall
+        ArrayList<Cube>cubeArrayList=new ArrayList<>();
+        cubeArrayList.add(world.piece.cube1);
+        cubeArrayList.add(world.piece.cube2);
+        cubeArrayList.add(world.piece.cube3);
+        cubeArrayList.add(world.piece.cube4);
+
+        for(Cube cube: cubeArrayList) {
+            int n = World.sizeOfCubes;
+            for (Cube t : World.tetrominos) {
+                if(cube.position.y==t.position.y && cube.position.x>t.position.x+0.5*n && cube.position.x<t.position.x+1.5*n){
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
 
@@ -475,6 +1610,7 @@ public class ThreeDTetris extends JPanel implements KeyListener{
 
     public ThreeDTetris(){
         world = new World(WIDTH, HEIGHT);
+        keepMovingDown =true;
         addKeyListener(this);
         this.setPreferredSize(new Dimension(WIDTH, HEIGHT));
         Thread mainThread = new Thread(new Runner());
@@ -504,11 +1640,13 @@ public class ThreeDTetris extends JPanel implements KeyListener{
         super.paintComponent(g);
 
         // Draw the background image
-        ImageIcon background = new ImageIcon("/Users/davidnkairu/IdeaProjects/COSC-112./resource/images/pngtree-galaxy-wallpaper-backgrounds-free-picture-image_3408160.jpg");
+        ImageIcon background = new ImageIcon("/Users/davidnkairu/IdeaProjects/COSC-112./resource/images/img.png");
         g.drawImage(background.getImage(), 0, 0, this.getWidth(), this.getHeight(), null);
 
-        // Now draw the spheres on top of the background image
+        
+
         world.drawTetrominos(g);
+
     }
 
 
