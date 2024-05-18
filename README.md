@@ -1,4 +1,5 @@
 **Tetris 3D Project**
+
 This project was a collaborative effort for the Intro to Computer Science course (COSC 112) at Amherst College. Our goal was to implement the classic game of Tetris in a fully 3D environment, utilizing the mathematical Rotation Matrix to handle the rotation of Tetrimino pieces.
 
 **Project Description**
